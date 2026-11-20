@@ -16,6 +16,7 @@
     "@neondatabase/serverless": "^1.2.1",
     "drizzle-orm": "^0.45.4",
     "next": "16.4.6",
+    "prismjs": "^1.30.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "zod": "^4.6.7",
@@ -24,6 +25,7 @@
   "devDependencies": {
     "@tailwindcss/turbopack": "4.3.3",
     "@types/node": "^20",
+    "@types/prismjs": "^1.26.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "drizzle-kit": "^0.31.11",

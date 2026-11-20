@@ -5,6 +5,7 @@ import Link from 'next/link'
 import type { Message, UserProfile } from '@/lib/db'
 import { useChatStore, useNotificationStore, useSidebarStore } from '@/lib/store'
 import { sendMessageSchema } from '@/lib/validators'
+import FormattedMessage from '../FormattedMessage'
 
 interface Props {
   me: UserProfile
@@ -278,16 +279,15 @@ export default function ChatWindow({ me, other, initialMessages }: Props) {
 
               return (
                 <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} mb-1`}>
-                  <div className={`group relative max-w-[75%] flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                  <div className={`group relative max-w-[92%] sm:max-w-[85%] md:max-w-[78%] flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
                     <div
-                      className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap break-words shadow-sm select-text ${
+                      className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed shadow-sm select-text w-full ${
                         isMe
                           ? 'bg-indigo-600 text-white rounded-br-sm'
                           : 'bg-white text-gray-800 rounded-bl-sm border border-gray-100'
-                      } ${isLong ? 'max-h-80 overflow-y-auto' : ''}`}
-                      dir="auto"
+                      }`}
                     >
-                      {msg.content}
+                      <FormattedMessage content={msg.content} isMe={isMe} />
                     </div>
 
                     <div className={`flex items-center gap-2 mt-1 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
