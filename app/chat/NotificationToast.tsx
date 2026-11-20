@@ -106,7 +106,7 @@ export default function NotificationToast() {
   if (popups.length === 0) return null
 
   return (
-    <div className="fixed top-4 right-4 z-50 flex flex-col gap-3 max-w-sm w-full pointer-events-none">
+    <div className="fixed top-3 right-3 left-3 sm:left-auto sm:right-4 z-50 flex flex-col gap-2.5 max-w-sm w-auto sm:w-full pointer-events-none">
       {popups.map((notif) => (
         <SingleToast key={notif.id} notif={notif} />
       ))}

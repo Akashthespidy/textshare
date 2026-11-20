@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useCallback, useState } from 'react'
+import Link from 'next/link'
 import type { Message, UserProfile } from '@/lib/db'
 import { useChatStore, useNotificationStore, useSidebarStore } from '@/lib/store'
 import { sendMessageSchema } from '@/lib/validators'
@@ -213,20 +214,31 @@ export default function ChatWindow({ me, other, initialMessages }: Props) {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-5 py-3 flex items-center gap-3 shadow-sm">
+      <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-2.5 sm:gap-3 shadow-sm">
+        {/* Back button on mobile to return to conversation list */}
+        <Link
+          href="/chat"
+          className="md:hidden -ml-1 p-2 rounded-xl text-gray-600 hover:text-indigo-600 hover:bg-gray-100 active:bg-gray-200 transition-colors flex items-center justify-center flex-shrink-0"
+          title="Back to conversations"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+          </svg>
+        </Link>
+
         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-400 to-purple-400 flex items-center justify-center text-white font-semibold flex-shrink-0 shadow-sm">
           {other.name[0]?.toUpperCase()}
         </div>
         <div className="min-w-0">
-          <p className="font-semibold text-gray-800 truncate">{other.name}</p>
+          <p className="font-semibold text-gray-800 truncate text-sm sm:text-base">{other.name}</p>
           <p className="text-xs text-gray-400 truncate">@{other.username}</p>
         </div>
 
-        <div className="ml-auto flex items-center gap-3">
+        <div className="ml-auto flex items-center gap-2 sm:gap-3">
           <button
             onClick={handleManualRefresh}
             disabled={isRefreshing}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+            className="p-1.5 sm:p-2 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
             title="Refresh messages"
           >
             <svg
@@ -337,7 +349,7 @@ export default function ChatWindow({ me, other, initialMessages }: Props) {
             onKeyDown={handleKeyDown}
             placeholder="Write a message… (any language, any length)"
             rows={1}
-            className="flex-1 bg-transparent resize-none text-sm text-gray-800 placeholder-gray-400 focus:outline-none py-1 max-h-48 overflow-y-auto leading-relaxed"
+            className="flex-1 bg-transparent resize-none text-base sm:text-sm text-gray-800 placeholder-gray-400 focus:outline-none py-1.5 max-h-48 overflow-y-auto leading-relaxed"
             style={{ minHeight: '36px' }}
             dir="auto"
           />

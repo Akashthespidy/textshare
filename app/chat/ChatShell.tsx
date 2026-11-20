@@ -55,14 +55,19 @@ export default function ChatShell({ me, children }: Props) {
 
   const displayList = searchQuery.trim() ? searchResults : contacts
   const activeUsername = pathname.split('/chat/')[1]?.split('/')[0]
+  const isChatOpen = Boolean(activeUsername)
 
   return (
-    <div className="flex h-screen bg-gray-100 overflow-hidden relative">
+    <div className="flex h-screen h-[100dvh] bg-gray-100 overflow-hidden relative">
       {/* Global Toast / Popup Container */}
       <NotificationToast />
 
-      {/* Sidebar */}
-      <aside className="w-80 flex-shrink-0 bg-white border-r border-gray-200 flex flex-col">
+      {/* Sidebar - on mobile: full screen when no chat is open, hidden when a chat is open */}
+      <aside
+        className={`${
+          isChatOpen ? 'hidden md:flex' : 'flex'
+        } w-full md:w-80 flex-shrink-0 bg-white border-r border-gray-200 flex-col h-full`}
+      >
         {/* Header */}
         <div className="px-4 py-4 border-b border-gray-100">
           <div className="flex items-center justify-between mb-3">
@@ -70,10 +75,10 @@ export default function ChatShell({ me, children }: Props) {
             <div className="flex items-center gap-2">
               <Link
                 href="/profile"
-                className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
-                title="Profile"
+                className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-indigo-600 transition-colors"
+                title="Profile Settings"
               >
-                <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                 </svg>
               </Link>
@@ -81,16 +86,25 @@ export default function ChatShell({ me, children }: Props) {
             </div>
           </div>
 
-          {/* Me */}
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-sm font-semibold text-indigo-700 flex-shrink-0">
+          {/* Me - Clickable profile badge */}
+          <Link
+            href="/profile"
+            className="flex items-center gap-2.5 mb-3 p-2 rounded-xl hover:bg-gray-50 active:bg-gray-100 transition-colors group cursor-pointer border border-transparent hover:border-gray-100"
+            title="View & Edit Profile"
+          >
+            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-sm font-bold text-white flex-shrink-0 shadow-sm">
               {me.name[0]?.toUpperCase()}
             </div>
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-gray-800 truncate">{me.name}</p>
-              <p className="text-xs text-gray-400">@{me.username}</p>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-gray-800 truncate group-hover:text-indigo-600 transition-colors">
+                {me.name}
+              </p>
+              <p className="text-xs text-gray-400 truncate">@{me.username}</p>
             </div>
-          </div>
+            <svg className="w-4 h-4 text-gray-400 group-hover:text-indigo-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </Link>
 
           {/* Search */}
           <div className="relative">
@@ -166,8 +180,14 @@ export default function ChatShell({ me, children }: Props) {
         </div>
       </aside>
 
-      {/* Main */}
-      <div className="flex-1 flex flex-col min-w-0">{children}</div>
+      {/* Main - on mobile: hidden when on conversation list, full screen when a chat is open */}
+      <main
+        className={`${
+          isChatOpen ? 'flex' : 'hidden md:flex'
+        } flex-1 flex-col min-w-0 h-full overflow-hidden`}
+      >
+        {children}
+      </main>
     </div>
   )
 }
