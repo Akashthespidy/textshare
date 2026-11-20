@@ -26,15 +26,14 @@ export default function ChatWindow({ me, other, initialMessages }: Props) {
 
   // Track known message IDs so we only popup on genuinely NEW messages
   const knownIdsRef = useRef<Set<string>>(new Set(initialMessages.map((m) => m.id)))
-  // Track last active timestamp for smart idle backoff
-  const lastActiveRef = useRef<number>(Date.now())
+  // Flag to prevent overlapping concurrent requests
+  const isFetchingRef = useRef<boolean>(false)
 
   // Initialise store with server-fetched messages on mount / other user change
   useEffect(() => {
     reset()
     setMessages(initialMessages)
     knownIdsRef.current = new Set(initialMessages.map((m) => m.id))
-    lastActiveRef.current = Date.now()
   }, [other.clerkId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const scrollToBottom = useCallback(() => {
@@ -47,6 +46,9 @@ export default function ChatWindow({ me, other, initialMessages }: Props) {
 
   // Single function to fetch messages and detect new incoming ones
   const fetchLatestMessages = useCallback(async () => {
+    if (isFetchingRef.current) return
+    isFetchingRef.current = true
+
     try {
       const res = await fetch(`/api/messages?with=${encodeURIComponent(other.username)}`)
       if (!res.ok) return
@@ -54,12 +56,10 @@ export default function ChatWindow({ me, other, initialMessages }: Props) {
       const fresh: Message[] = await res.json()
 
       // Check if any genuinely new messages arrived from the other person
-      let hasNewIncoming = false
       for (const msg of fresh) {
         if (!knownIdsRef.current.has(msg.id)) {
           knownIdsRef.current.add(msg.id)
           if (msg.senderId === other.clerkId) {
-            hasNewIncoming = true
             // Trigger popup toast!
             showPopup({
               senderName: other.name,
@@ -71,84 +71,48 @@ export default function ChatWindow({ me, other, initialMessages }: Props) {
         }
       }
 
-      // Only update state if message list actually changed
+      // Only update state if message list actually changed (prevents unnecessary re-renders)
       const currentList = useChatStore.getState().messages
       const lastCurrentId = currentList[currentList.length - 1]?.id
       const lastFreshId = fresh[fresh.length - 1]?.id
 
       if (currentList.length !== fresh.length || lastCurrentId !== lastFreshId) {
         setMessages(fresh)
-        if (hasNewIncoming) {
-          lastActiveRef.current = Date.now()
-        }
       }
     } catch {
       // Ignore network errors during background check
+    } finally {
+      isFetchingRef.current = false
     }
   }, [other.username, other.clerkId, other.name, showPopup, setMessages])
 
   // Manual refresh button handler
   async function handleManualRefresh() {
     setIsRefreshing(true)
-    lastActiveRef.current = Date.now()
     await fetchLatestMessages()
     setTimeout(() => setIsRefreshing(false), 500)
   }
 
-  // ── Smart polling with visibility pause and idle backoff ───────────────────
+  // ── Clean 2-second polling (pauses when tab is hidden) ─────────────────────
   useEffect(() => {
-    let timeoutId: NodeJS.Timeout | null = null
-    let isCancelled = false
+    const interval = setInterval(() => {
+      // Pause polling when tab is hidden/minimized
+      if (typeof document !== 'undefined' && document.hidden) return
+      fetchLatestMessages()
+    }, 2000)
 
-    const scheduleNextCheck = () => {
-      if (isCancelled) return
-
-      // Do NOT poll when the tab or window is hidden / backgrounded
-      if (typeof document !== 'undefined' && document.hidden) {
-        return
-      }
-
-      // Calculate adaptive interval based on idle time
-      const timeSinceActive = Date.now() - lastActiveRef.current
-      let delayMs: number
-      if (timeSinceActive < 30_000) {
-        delayMs = 7000 // Active chatting: 7s
-      } else if (timeSinceActive < 120_000) {
-        delayMs = 15000 // Idle for > 30s: 15s
-      } else {
-        delayMs = 30000 // Long idle: 30s
-      }
-
-      timeoutId = setTimeout(async () => {
-        if (isCancelled) return
-        if (typeof document !== 'undefined' && !document.hidden) {
-          await fetchLatestMessages()
-        }
-        scheduleNextCheck()
-      }, delayMs)
-    }
-
-    // Start scheduler
-    scheduleNextCheck()
-
-    // Immediately fetch when tab regains visibility or focus
-    const handleVisibilityOrFocus = () => {
+    // Also fetch immediately when user returns to the tab
+    const handleVisibility = () => {
       if (typeof document !== 'undefined' && !document.hidden) {
-        lastActiveRef.current = Date.now()
         fetchLatestMessages()
-        if (timeoutId) clearTimeout(timeoutId)
-        scheduleNextCheck()
       }
     }
 
-    window.addEventListener('focus', handleVisibilityOrFocus)
-    document.addEventListener('visibilitychange', handleVisibilityOrFocus)
+    document.addEventListener('visibilitychange', handleVisibility)
 
     return () => {
-      isCancelled = true
-      if (timeoutId) clearTimeout(timeoutId)
-      window.removeEventListener('focus', handleVisibilityOrFocus)
-      document.removeEventListener('visibilitychange', handleVisibilityOrFocus)
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', handleVisibility)
     }
   }, [fetchLatestMessages])
 
@@ -164,7 +128,6 @@ export default function ChatWindow({ me, other, initialMessages }: Props) {
 
     setError(null)
     setText('')
-    lastActiveRef.current = Date.now()
 
     // Resize textarea back
     if (textareaRef.current) {
@@ -203,7 +166,6 @@ export default function ChatWindow({ me, other, initialMessages }: Props) {
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    lastActiveRef.current = Date.now()
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       sendMessage()
@@ -354,7 +316,6 @@ export default function ChatWindow({ me, other, initialMessages }: Props) {
             ref={textareaRef}
             value={text}
             onChange={(e) => {
-              lastActiveRef.current = Date.now()
               setText(e.target.value)
               e.target.style.height = 'auto'
               e.target.style.height = Math.min(e.target.scrollHeight, 200) + 'px'

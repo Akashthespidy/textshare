@@ -20,12 +20,20 @@ export default function ChatShell({ me, children }: Props) {
     setContacts, setSearchResults, setSearchQuery, setIsSearching,
   } = useSidebarStore()
 
-  const fetchContacts = useCallback(async () => {
-    const res = await fetch('/api/conversations')
-    if (res.ok) setContacts(await res.json())
-  }, [setContacts])
-
-  useEffect(() => { fetchContacts() }, [fetchContacts])
+  useEffect(() => {
+    let ignore = false
+    async function loadContacts() {
+      try {
+        const res = await fetch('/api/conversations')
+        if (res.ok && !ignore) {
+          const data = await res.json()
+          useSidebarStore.getState().setContacts(data)
+        }
+      } catch {}
+    }
+    loadContacts()
+    return () => { ignore = true }
+  }, [])
 
   useEffect(() => {
     if (!searchQuery.trim()) {
