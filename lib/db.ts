@@ -1,135 +1,106 @@
-import fs from 'fs'
-import path from 'path'
+import { db } from './drizzle'
+import { users, messages } from './schema'
+import { eq, or, and, ilike } from 'drizzle-orm'
+import type { User, Message, NewUser } from './schema'
 
-const DATA_DIR = path.join(process.cwd(), 'data')
+// ── Re-export types for convenience ──────────────────────────────────────────
+export type { User as UserProfile, Message }
 
-function ensureDir(dir: string) {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true })
-  }
+// ── Users ─────────────────────────────────────────────────────────────────────
+
+export async function getUserByClerkId(clerkId: string): Promise<User | null> {
+  const rows = await db.select().from(users).where(eq(users.clerkId, clerkId)).limit(1)
+  return rows[0] ?? null
 }
 
-function readJson<T>(filePath: string, fallback: T): T {
-  try {
-    if (!fs.existsSync(filePath)) return fallback
-    return JSON.parse(fs.readFileSync(filePath, 'utf-8')) as T
-  } catch {
-    return fallback
-  }
+export async function getUserByUsername(username: string): Promise<User | null> {
+  const rows = await db.select().from(users).where(eq(users.username, username)).limit(1)
+  return rows[0] ?? null
 }
 
-function writeJson(filePath: string, data: unknown) {
-  ensureDir(path.dirname(filePath))
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8')
+export async function isUsernameTaken(username: string): Promise<boolean> {
+  const rows = await db.select({ id: users.id }).from(users).where(eq(users.username, username)).limit(1)
+  return rows.length > 0
 }
 
-// ── User profile ──────────────────────────────────────────────────────────────
-
-export interface UserProfile {
-  clerkId: string
-  username: string
-  name: string
-  avatarUrl?: string
-  createdAt: string
+export async function createUser(data: NewUser): Promise<User> {
+  const rows = await db.insert(users).values(data).returning()
+  return rows[0]
 }
 
-function usersFilePath() {
-  return path.join(DATA_DIR, 'users.json')
+export async function updateUser(clerkId: string, data: Partial<Pick<User, 'name' | 'avatarUrl'>>): Promise<User> {
+  const rows = await db.update(users).set(data).where(eq(users.clerkId, clerkId)).returning()
+  if (!rows[0]) throw new Error('User not found')
+  return rows[0]
 }
 
-function getUsersMap(): Record<string, UserProfile> {
-  return readJson<Record<string, UserProfile>>(usersFilePath(), {})
+export async function deleteUser(clerkId: string): Promise<void> {
+  await db.delete(users).where(eq(users.clerkId, clerkId))
 }
 
-export function getUserByClerkId(clerkId: string): UserProfile | null {
-  const users = getUsersMap()
-  return users[clerkId] ?? null
-}
-
-export function getUserByUsername(username: string): UserProfile | null {
-  const users = getUsersMap()
-  return Object.values(users).find((u) => u.username === username) ?? null
-}
-
-export function createUser(profile: UserProfile) {
-  const users = getUsersMap()
-  users[profile.clerkId] = profile
-  writeJson(usersFilePath(), users)
-}
-
-export function updateUser(clerkId: string, updates: Partial<Omit<UserProfile, 'clerkId'>>) {
-  const users = getUsersMap()
-  if (!users[clerkId]) throw new Error('User not found')
-  users[clerkId] = { ...users[clerkId], ...updates }
-  writeJson(usersFilePath(), users)
-  return users[clerkId]
-}
-
-export function deleteUser(clerkId: string) {
-  const users = getUsersMap()
-  delete users[clerkId]
-  writeJson(usersFilePath(), users)
-}
-
-export function isUsernameTaken(username: string): boolean {
-  const users = getUsersMap()
-  return Object.values(users).some((u) => u.username === username)
-}
-
-export function getAllUsers(): UserProfile[] {
-  return Object.values(getUsersMap())
+export async function searchUsers(query: string): Promise<User[]> {
+  return db
+    .select()
+    .from(users)
+    .where(
+      or(
+        ilike(users.username, `%${query}%`),
+        ilike(users.name, `%${query}%`)
+      )
+    )
+    .limit(20)
 }
 
 // ── Messages ──────────────────────────────────────────────────────────────────
 
-export interface Message {
-  id: string
-  senderId: string   // clerkId
-  receiverId: string // clerkId
+export async function getMessages(clerkIdA: string, clerkIdB: string): Promise<Message[]> {
+  return db
+    .select()
+    .from(messages)
+    .where(
+      or(
+        and(eq(messages.senderId, clerkIdA), eq(messages.receiverId, clerkIdB)),
+        and(eq(messages.senderId, clerkIdB), eq(messages.receiverId, clerkIdA))
+      )
+    )
+    .orderBy(messages.createdAt)
+}
+
+export async function sendMessage(
+  senderId: string,
+  receiverId: string,
   content: string
-  createdAt: string
+): Promise<Message> {
+  const rows = await db
+    .insert(messages)
+    .values({ senderId, receiverId, content })
+    .returning()
+  return rows[0]
 }
 
-function conversationId(a: string, b: string): string {
-  return [a, b].sort().join('__')
+export async function getConversationPartnerIds(clerkId: string): Promise<string[]> {
+  // Get all unique users this person has exchanged messages with
+  const sent = await db
+    .selectDistinct({ partnerId: messages.receiverId })
+    .from(messages)
+    .where(eq(messages.senderId, clerkId))
+
+  const received = await db
+    .selectDistinct({ partnerId: messages.senderId })
+    .from(messages)
+    .where(eq(messages.receiverId, clerkId))
+
+  const all = [...sent.map((r) => r.partnerId), ...received.map((r) => r.partnerId)]
+  return [...new Set(all)]
 }
 
-function messagesFilePath(convId: string) {
-  return path.join(DATA_DIR, 'conversations', `${convId}.json`)
-}
+export async function getConversationPartners(clerkId: string): Promise<User[]> {
+  const partnerIds = await getConversationPartnerIds(clerkId)
+  if (partnerIds.length === 0) return []
 
-export function getMessages(clerkIdA: string, clerkIdB: string): Message[] {
-  const convId = conversationId(clerkIdA, clerkIdB)
-  return readJson<Message[]>(messagesFilePath(convId), [])
-}
-
-export function sendMessage(senderId: string, receiverId: string, content: string): Message {
-  const convId = conversationId(senderId, receiverId)
-  const messages = readJson<Message[]>(messagesFilePath(convId), [])
-  const msg: Message = {
-    id: crypto.randomUUID(),
-    senderId,
-    receiverId,
-    content,
-    createdAt: new Date().toISOString(),
-  }
-  messages.push(msg)
-  writeJson(messagesFilePath(convId), messages)
-  return msg
-}
-
-export function getConversationPartners(clerkId: string): string[] {
-  const convDir = path.join(DATA_DIR, 'conversations')
-  if (!fs.existsSync(convDir)) return []
-  const files = fs.readdirSync(convDir)
-  const partners: string[] = []
-  for (const file of files) {
-    if (!file.endsWith('.json')) continue
-    const parts = file.replace('.json', '').split('__')
-    if (parts.includes(clerkId)) {
-      const partner = parts.find((p) => p !== clerkId)
-      if (partner) partners.push(partner)
-    }
-  }
-  return partners
+  // Fetch each partner's profile
+  const result = await Promise.all(
+    partnerIds.map((id) => getUserByClerkId(id))
+  )
+  return result.filter((u): u is User => u !== null)
 }

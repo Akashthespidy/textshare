@@ -11,7 +11,7 @@ export default async function Home() {
     redirect('/sign-in')
   }
 
-  const user = getUserByClerkId(userId)
+  const user = await getUserByClerkId(userId)
 
   if (!user) {
     redirect('/setup-username')

@@ -1,35 +1,30 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { UserButton } from '@clerk/nextjs'
 import type { UserProfile } from '@/lib/db'
+import { useSidebarStore } from '@/lib/store'
 
 interface Props {
   me: UserProfile
   children: React.ReactNode
 }
 
-interface ConvUser extends UserProfile {}
-
 export default function ChatShell({ me, children }: Props) {
   const pathname = usePathname()
-  const router = useRouter()
-  const [contacts, setContacts] = useState<ConvUser[]>([])
-  const [searchQuery, setSearchQuery] = useState('')
-  const [searchResults, setSearchResults] = useState<ConvUser[]>([])
-  const [isSearching, setIsSearching] = useState(false)
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const {
+    contacts, searchResults, searchQuery, isSearching,
+    setContacts, setSearchResults, setSearchQuery, setIsSearching,
+  } = useSidebarStore()
 
   const fetchContacts = useCallback(async () => {
     const res = await fetch('/api/conversations')
     if (res.ok) setContacts(await res.json())
-  }, [])
+  }, [setContacts])
 
-  useEffect(() => {
-    fetchContacts()
-  }, [fetchContacts])
+  useEffect(() => { fetchContacts() }, [fetchContacts])
 
   useEffect(() => {
     if (!searchQuery.trim()) {
@@ -41,25 +36,21 @@ export default function ChatShell({ me, children }: Props) {
     const timer = setTimeout(async () => {
       const res = await fetch(`/api/users?q=${encodeURIComponent(searchQuery)}`)
       if (res.ok) {
-        const all: ConvUser[] = await res.json()
+        const all: UserProfile[] = await res.json()
         setSearchResults(all.filter((u) => u.clerkId !== me.clerkId))
       }
       setIsSearching(false)
     }, 300)
     return () => clearTimeout(timer)
-  }, [searchQuery, me.clerkId])
+  }, [searchQuery, me.clerkId, setSearchResults, setIsSearching])
 
   const displayList = searchQuery.trim() ? searchResults : contacts
   const activeUsername = pathname.split('/chat/')[1]?.split('/')[0]
 
   return (
     <div className="flex h-screen bg-gray-100 overflow-hidden">
-      {/* ── Sidebar ── */}
-      <aside
-        className={`${
-          sidebarOpen ? 'w-80' : 'w-0'
-        } flex-shrink-0 transition-all duration-200 overflow-hidden bg-white border-r border-gray-200 flex flex-col`}
-      >
+      {/* Sidebar */}
+      <aside className="w-80 flex-shrink-0 bg-white border-r border-gray-200 flex flex-col">
         {/* Header */}
         <div className="px-4 py-4 border-b border-gray-100">
           <div className="flex items-center justify-between mb-3">
@@ -141,19 +132,8 @@ export default function ChatShell({ me, children }: Props) {
         </div>
       </aside>
 
-      {/* ── Main area ── */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Mobile/collapse toggle */}
-        <button
-          onClick={() => setSidebarOpen((v) => !v)}
-          className="absolute top-4 left-4 z-20 md:hidden p-2 bg-white rounded-lg shadow"
-        >
-          <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-        </button>
-        {children}
-      </div>
+      {/* Main */}
+      <div className="flex-1 flex flex-col min-w-0">{children}</div>
     </div>
   )
 }

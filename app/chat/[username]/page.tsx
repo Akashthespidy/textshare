@@ -3,6 +3,8 @@ import { redirect } from 'next/navigation'
 import { getUserByClerkId, getUserByUsername, getMessages } from '@/lib/db'
 import ChatWindow from './ChatWindow'
 
+export const instant = false
+
 export default async function ChatWithPage({
   params,
 }: {
@@ -12,10 +14,10 @@ export default async function ChatWithPage({
   const { userId } = await auth()
   if (!userId) redirect('/sign-in')
 
-  const me = getUserByClerkId(userId)
+  const me = await getUserByClerkId(userId)
   if (!me) redirect('/setup-username')
 
-  const other = getUserByUsername(username)
+  const other = await getUserByUsername(username)
   if (!other) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -24,7 +26,7 @@ export default async function ChatWithPage({
     )
   }
 
-  const messages = getMessages(userId, other.clerkId)
+  const initialMessages = await getMessages(userId, other.clerkId)
 
-  return <ChatWindow me={me} other={other} initialMessages={messages} />
+  return <ChatWindow me={me} other={other} initialMessages={initialMessages} />
 }

@@ -1,10 +1,12 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useClerk } from '@clerk/nextjs'
 import Link from 'next/link'
 import type { UserProfile } from '@/lib/db'
+import { useProfileStore } from '@/lib/store'
+import { updateUserSchema } from '@/lib/validators'
 
 interface Props {
   me: UserProfile
@@ -14,39 +16,52 @@ export default function ProfileClient({ me }: Props) {
   const router = useRouter()
   const { signOut } = useClerk()
   const [name, setName] = useState(me.name)
-  const [saved, setSaved] = useState(false)
-  const [error, setError] = useState('')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const [isPending, startTransition] = useTransition()
-  const [isDeleting, startDeleteTransition] = useTransition()
+
+  const { isSaving, isDeleting, savedOk, error, setIsSaving, setIsDeleting, setSavedOk, setError } =
+    useProfileStore()
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
-    setError('')
-    setSaved(false)
-    startTransition(async () => {
+    setError(null)
+    setSavedOk(false)
+
+    // Client-side Zod validation
+    const parsed = updateUserSchema.safeParse({ name: name.trim() })
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message ?? 'Invalid input')
+      return
+    }
+
+    setIsSaving(true)
+    try {
       const res = await fetch('/api/users', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim() }),
+        body: JSON.stringify(parsed.data),
       })
       if (res.ok) {
-        setSaved(true)
-        setTimeout(() => setSaved(false), 3000)
+        setSavedOk(true)
+        setTimeout(() => setSavedOk(false), 3000)
         router.refresh()
       } else {
         const d = await res.json()
         setError(d.error ?? 'Failed to save')
       }
-    })
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   async function handleDelete() {
-    startDeleteTransition(async () => {
+    setIsDeleting(true)
+    try {
       await fetch('/api/users', { method: 'DELETE' })
       await signOut()
       router.replace('/sign-in')
-    })
+    } finally {
+      setIsDeleting(false)
+    }
   }
 
   return (
@@ -62,7 +77,6 @@ export default function ProfileClient({ me }: Props) {
         </div>
 
         <div className="p-6 space-y-6">
-          {/* Edit name */}
           <form onSubmit={handleSave} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Display Name</label>
@@ -70,6 +84,7 @@ export default function ProfileClient({ me }: Props) {
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                maxLength={60}
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 text-gray-800"
               />
             </div>
@@ -84,17 +99,17 @@ export default function ProfileClient({ me }: Props) {
             {error && (
               <p className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-lg">{error}</p>
             )}
-            {saved && (
+            {savedOk && (
               <p className="text-sm text-green-600 bg-green-50 px-3 py-2 rounded-lg">✓ Changes saved</p>
             )}
 
             <div className="flex gap-3">
               <button
                 type="submit"
-                disabled={isPending}
+                disabled={isSaving}
                 className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold rounded-xl transition-colors"
               >
-                {isPending ? 'Saving…' : 'Save Changes'}
+                {isSaving ? 'Saving…' : 'Save Changes'}
               </button>
               <Link
                 href="/chat"
@@ -109,7 +124,7 @@ export default function ProfileClient({ me }: Props) {
           <div className="border border-red-200 rounded-xl p-4">
             <h3 className="text-sm font-semibold text-red-600 mb-1">Danger Zone</h3>
             <p className="text-xs text-gray-500 mb-3">
-              Deleting your account will remove your profile and sign you out. Your messages will remain.
+              Deleting your account removes your profile and signs you out.
             </p>
             {!showDeleteConfirm ? (
               <button

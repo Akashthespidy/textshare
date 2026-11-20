@@ -2,13 +2,12 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { useUser } from '@clerk/nextjs'
+import { createUserSchema } from '@/lib/validators'
 
 export default function SetupUsernamePage() {
-  const { user } = useUser()
   const router = useRouter()
   const [username, setUsername] = useState('')
-  const [name, setName] = useState(user?.fullName ?? '')
+  const [name, setName] = useState('')
   const [error, setError] = useState('')
   const [isPending, startTransition] = useTransition()
 
@@ -16,12 +15,13 @@ export default function SetupUsernamePage() {
     e.preventDefault()
     setError('')
 
-    if (!username.trim() || username.length < 3) {
-      setError('Username must be at least 3 characters.')
-      return
-    }
-    if (!/^[a-z0-9_]+$/.test(username)) {
-      setError('Only lowercase letters, numbers, and underscores allowed.')
+    // Client-side Zod validation
+    const parsed = createUserSchema.safeParse({
+      username: username.trim(),
+      name: name.trim() || username.trim(),
+    })
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message ?? 'Invalid input')
       return
     }
 
@@ -29,7 +29,7 @@ export default function SetupUsernamePage() {
       const res = await fetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: username.trim(), name: name.trim() || username }),
+        body: JSON.stringify(parsed.data),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -51,14 +51,13 @@ export default function SetupUsernamePage() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Display Name
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Display Name</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Your name"
+              maxLength={60}
               className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 text-gray-800"
             />
           </div>
@@ -75,10 +74,11 @@ export default function SetupUsernamePage() {
                 onChange={(e) => setUsername(e.target.value.toLowerCase())}
                 placeholder="yourhandle"
                 required
+                maxLength={30}
                 className="w-full pl-8 pr-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 text-gray-800"
               />
             </div>
-            <p className="text-xs text-gray-400 mt-1">lowercase, numbers, underscores only</p>
+            <p className="text-xs text-gray-400 mt-1">3–30 chars · lowercase, numbers, underscores only</p>
           </div>
 
           {error && (
