@@ -1,4 +1,9 @@
+import { Suspense } from 'react'
 import { SignUp } from '@clerk/nextjs'
+
+function SignUpForm() {
+  return <SignUp />
+}
 
 export default function SignUpPage() {
   return (
@@ -8,7 +13,13 @@ export default function SignUpPage() {
           <h1 className="text-4xl font-bold text-indigo-700">TextShare</h1>
           <p className="text-gray-500 mt-2">Join and start sharing texts 🌐</p>
         </div>
-        <SignUp routing="hash" />
+        <Suspense fallback={
+          <div className="w-80 h-40 bg-white rounded-2xl animate-pulse flex items-center justify-center">
+            <span className="text-gray-400 text-sm">Loading…</span>
+          </div>
+        }>
+          <SignUpForm />
+        </Suspense>
       </div>
     </div>
   )

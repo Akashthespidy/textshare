@@ -3,6 +3,8 @@ import { redirect } from 'next/navigation'
 import { getUserByClerkId } from '@/lib/db'
 import ChatShell from './ChatShell'
 
+export const instant = false
+
 export default async function ChatLayout({ children }: { children: React.ReactNode }) {
   const { userId } = await auth()
   if (!userId) redirect('/sign-in')
