@@ -82,3 +82,32 @@ export const useProfileStore = create<ProfileState>((set) => ({
   setSavedOk: (v) => set({ savedOk: v }),
   setError: (e) => set({ error: e }),
 }))
+
+// ── Notification popup store ──────────────────────────────────────────────
+
+export interface ToastNotification {
+  id: string
+  senderName: string
+  senderUsername: string
+  content: string
+  createdAt: Date | string
+}
+
+interface NotificationState {
+  popups: ToastNotification[]
+  showPopup: (notif: Omit<ToastNotification, 'id'>) => void
+  removePopup: (id: string) => void
+}
+
+export const useNotificationStore = create<NotificationState>((set) => ({
+  popups: [],
+  showPopup: (notif) => {
+    const id = `popup-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+    set((s) => ({
+      // Keep at most 3 popups stacked to avoid cluttering
+      popups: [...s.popups.slice(-2), { ...notif, id }],
+    }))
+  },
+  removePopup: (id) =>
+    set((s) => ({ popups: s.popups.filter((p) => p.id !== id) })),
+}))

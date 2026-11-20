@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useCallback, useState } from 'react'
 import type { Message, UserProfile } from '@/lib/db'
-import { useChatStore } from '@/lib/store'
+import { useChatStore, useNotificationStore } from '@/lib/store'
 import { sendMessageSchema } from '@/lib/validators'
 
 interface Props {
@@ -16,32 +16,141 @@ export default function ChatWindow({ me, other, initialMessages }: Props) {
     messages, isSending, error,
     setMessages, addMessage, setIsSending, setError, reset,
   } = useChatStore()
+  const { showPopup } = useNotificationStore()
 
   const [text, setText] = useState('')
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // Track known message IDs so we only popup on genuinely NEW messages
+  const knownIdsRef = useRef<Set<string>>(new Set(initialMessages.map((m) => m.id)))
+  // Track last active timestamp for smart idle backoff
+  const lastActiveRef = useRef<number>(Date.now())
 
   // Initialise store with server-fetched messages on mount / other user change
   useEffect(() => {
     reset()
     setMessages(initialMessages)
+    knownIdsRef.current = new Set(initialMessages.map((m) => m.id))
+    lastActiveRef.current = Date.now()
   }, [other.clerkId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const scrollToBottom = useCallback(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [])
 
-  useEffect(() => { scrollToBottom() }, [messages, scrollToBottom])
-
-  // Poll for new messages every 3 s
   useEffect(() => {
-    const interval = setInterval(async () => {
+    scrollToBottom()
+  }, [messages, scrollToBottom])
+
+  // Single function to fetch messages and detect new incoming ones
+  const fetchLatestMessages = useCallback(async () => {
+    try {
       const res = await fetch(`/api/messages?with=${encodeURIComponent(other.username)}`)
-      if (res.ok) setMessages(await res.json())
-    }, 3000)
-    return () => clearInterval(interval)
-  }, [other.username, setMessages])
+      if (!res.ok) return
+
+      const fresh: Message[] = await res.json()
+
+      // Check if any genuinely new messages arrived from the other person
+      let hasNewIncoming = false
+      for (const msg of fresh) {
+        if (!knownIdsRef.current.has(msg.id)) {
+          knownIdsRef.current.add(msg.id)
+          if (msg.senderId === other.clerkId) {
+            hasNewIncoming = true
+            // Trigger popup toast!
+            showPopup({
+              senderName: other.name,
+              senderUsername: other.username,
+              content: msg.content,
+              createdAt: msg.createdAt,
+            })
+          }
+        }
+      }
+
+      // Only update state if message list actually changed
+      const currentList = useChatStore.getState().messages
+      const lastCurrentId = currentList[currentList.length - 1]?.id
+      const lastFreshId = fresh[fresh.length - 1]?.id
+
+      if (currentList.length !== fresh.length || lastCurrentId !== lastFreshId) {
+        setMessages(fresh)
+        if (hasNewIncoming) {
+          lastActiveRef.current = Date.now()
+        }
+      }
+    } catch {
+      // Ignore network errors during background check
+    }
+  }, [other.username, other.clerkId, other.name, showPopup, setMessages])
+
+  // Manual refresh button handler
+  async function handleManualRefresh() {
+    setIsRefreshing(true)
+    lastActiveRef.current = Date.now()
+    await fetchLatestMessages()
+    setTimeout(() => setIsRefreshing(false), 500)
+  }
+
+  // ── Smart polling with visibility pause and idle backoff ───────────────────
+  useEffect(() => {
+    let timeoutId: NodeJS.Timeout | null = null
+    let isCancelled = false
+
+    const scheduleNextCheck = () => {
+      if (isCancelled) return
+
+      // Do NOT poll when the tab or window is hidden / backgrounded
+      if (typeof document !== 'undefined' && document.hidden) {
+        return
+      }
+
+      // Calculate adaptive interval based on idle time
+      const timeSinceActive = Date.now() - lastActiveRef.current
+      let delayMs: number
+      if (timeSinceActive < 30_000) {
+        delayMs = 7000 // Active chatting: 7s
+      } else if (timeSinceActive < 120_000) {
+        delayMs = 15000 // Idle for > 30s: 15s
+      } else {
+        delayMs = 30000 // Long idle: 30s
+      }
+
+      timeoutId = setTimeout(async () => {
+        if (isCancelled) return
+        if (typeof document !== 'undefined' && !document.hidden) {
+          await fetchLatestMessages()
+        }
+        scheduleNextCheck()
+      }, delayMs)
+    }
+
+    // Start scheduler
+    scheduleNextCheck()
+
+    // Immediately fetch when tab regains visibility or focus
+    const handleVisibilityOrFocus = () => {
+      if (typeof document !== 'undefined' && !document.hidden) {
+        lastActiveRef.current = Date.now()
+        fetchLatestMessages()
+        if (timeoutId) clearTimeout(timeoutId)
+        scheduleNextCheck()
+      }
+    }
+
+    window.addEventListener('focus', handleVisibilityOrFocus)
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus)
+
+    return () => {
+      isCancelled = true
+      if (timeoutId) clearTimeout(timeoutId)
+      window.removeEventListener('focus', handleVisibilityOrFocus)
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus)
+    }
+  }, [fetchLatestMessages])
 
   async function sendMessage() {
     const content = text.trim()
@@ -55,14 +164,18 @@ export default function ChatWindow({ me, other, initialMessages }: Props) {
 
     setError(null)
     setText('')
+    lastActiveRef.current = Date.now()
+
     // Resize textarea back
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
     }
 
     // Optimistic message
+    const optimisticId = `opt-${Date.now()}`
+    knownIdsRef.current.add(optimisticId)
     const optimistic: Message = {
-      id: `opt-${Date.now()}`,
+      id: optimisticId,
       senderId: me.clerkId,
       receiverId: other.clerkId,
       content,
@@ -82,8 +195,7 @@ export default function ChatWindow({ me, other, initialMessages }: Props) {
         const data = await res.json()
         setError(data.error ?? 'Failed to send')
       } else {
-        const fresh = await fetch(`/api/messages?with=${encodeURIComponent(other.username)}`)
-        if (fresh.ok) setMessages(await fresh.json())
+        await fetchLatestMessages()
       }
     } finally {
       setIsSending(false)
@@ -91,6 +203,7 @@ export default function ChatWindow({ me, other, initialMessages }: Props) {
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    lastActiveRef.current = Date.now()
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       sendMessage()
@@ -130,14 +243,34 @@ export default function ChatWindow({ me, other, initialMessages }: Props) {
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-5 py-3 flex items-center gap-3 shadow-sm">
-        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-400 to-purple-400 flex items-center justify-center text-white font-semibold flex-shrink-0">
+        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-400 to-purple-400 flex items-center justify-center text-white font-semibold flex-shrink-0 shadow-sm">
           {other.name[0]?.toUpperCase()}
         </div>
-        <div>
-          <p className="font-semibold text-gray-800">{other.name}</p>
-          <p className="text-xs text-gray-400">@{other.username}</p>
+        <div className="min-w-0">
+          <p className="font-semibold text-gray-800 truncate">{other.name}</p>
+          <p className="text-xs text-gray-400 truncate">@{other.username}</p>
         </div>
-        <div className="ml-auto text-xs text-gray-400 italic">Any language · 100k chars · Bangla ✓</div>
+
+        <div className="ml-auto flex items-center gap-3">
+          <button
+            onClick={handleManualRefresh}
+            disabled={isRefreshing}
+            className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+            title="Refresh messages"
+          >
+            <svg
+              className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-indigo-600' : ''}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </button>
+          <span className="hidden sm:inline text-xs text-gray-400 italic">
+            Supports 100k+ words · Bangla ✓
+          </span>
+        </div>
       </div>
 
       {/* Messages */}
@@ -164,11 +297,12 @@ export default function ChatWindow({ me, other, initialMessages }: Props) {
                 <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} mb-1`}>
                   <div className={`group relative max-w-[75%] flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
                     <div
-                      className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap break-words shadow-sm ${
+                      className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap break-words shadow-sm select-text ${
                         isMe
                           ? 'bg-indigo-600 text-white rounded-br-sm'
                           : 'bg-white text-gray-800 rounded-bl-sm border border-gray-100'
-                      } ${isLong ? 'max-h-64 overflow-y-auto' : ''}`}
+                      } ${isLong ? 'max-h-80 overflow-y-auto' : ''}`}
+                      dir="auto"
                     >
                       {msg.content}
                     </div>
@@ -177,25 +311,26 @@ export default function ChatWindow({ me, other, initialMessages }: Props) {
                       <span className="text-xs text-gray-400">{formatTime(msg.createdAt)}</span>
                       <button
                         onClick={() => copyText(msg.content, msg.id)}
-                        className={`opacity-0 group-hover:opacity-100 transition-opacity text-xs flex items-center gap-1 px-2 py-0.5 rounded-full ${
+                        className={`opacity-0 group-hover:opacity-100 transition-opacity text-xs flex items-center gap-1 px-2.5 py-1 rounded-full ${
                           isMe
                             ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'
                             : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                         }`}
+                        title="Copy entire text"
                       >
                         {copiedId === msg.id ? (
                           <>
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                             </svg>
-                            Copied!
+                            <span className="text-green-700 font-medium">Copied!</span>
                           </>
                         ) : (
                           <>
                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                             </svg>
-                            Copy
+                            <span>Copy</span>
                           </>
                         )}
                       </button>
@@ -219,6 +354,7 @@ export default function ChatWindow({ me, other, initialMessages }: Props) {
             ref={textareaRef}
             value={text}
             onChange={(e) => {
+              lastActiveRef.current = Date.now()
               setText(e.target.value)
               e.target.style.height = 'auto'
               e.target.style.height = Math.min(e.target.scrollHeight, 200) + 'px'
@@ -233,15 +369,15 @@ export default function ChatWindow({ me, other, initialMessages }: Props) {
           <button
             onClick={sendMessage}
             disabled={isSending || !text.trim()}
-            className="flex-shrink-0 w-9 h-9 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed rounded-full flex items-center justify-center transition-colors"
+            className="flex-shrink-0 w-9 h-9 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed rounded-full flex items-center justify-center transition-colors shadow-sm"
           >
             <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
             </svg>
           </button>
         </div>
-        <p className="text-xs text-gray-400 mt-1 text-center">
-          Enter to send · Shift+Enter for new line · Hover a message to copy
+        <p className="text-xs text-gray-400 mt-1.5 text-center">
+          Enter to send · Shift+Enter for new line · Hover message to copy full text
         </p>
       </div>
     </div>

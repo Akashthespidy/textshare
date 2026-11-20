@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation'
 import { UserButton } from '@clerk/nextjs'
 import type { UserProfile } from '@/lib/db'
 import { useSidebarStore } from '@/lib/store'
+import NotificationToast from './NotificationToast'
 
 interface Props {
   me: UserProfile
@@ -48,7 +49,10 @@ export default function ChatShell({ me, children }: Props) {
   const activeUsername = pathname.split('/chat/')[1]?.split('/')[0]
 
   return (
-    <div className="flex h-screen bg-gray-100 overflow-hidden">
+    <div className="flex h-screen bg-gray-100 overflow-hidden relative">
+      {/* Global Toast / Popup Container */}
+      <NotificationToast />
+
       {/* Sidebar */}
       <aside className="w-80 flex-shrink-0 bg-white border-r border-gray-200 flex flex-col">
         {/* Header */}
