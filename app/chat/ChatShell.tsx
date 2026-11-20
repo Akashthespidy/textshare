@@ -16,8 +16,8 @@ interface Props {
 export default function ChatShell({ me, children }: Props) {
   const pathname = usePathname()
   const {
-    contacts, searchResults, searchQuery, isSearching,
-    setContacts, setSearchResults, setSearchQuery, setIsSearching,
+    contacts, searchResults, searchQuery, isSearching, unreadMap,
+    setSearchResults, setSearchQuery, setIsSearching, markRead,
   } = useSidebarStore()
 
   useEffect(() => {
@@ -122,20 +122,42 @@ export default function ChatShell({ me, children }: Props) {
           )}
           {displayList.map((u) => {
             const isActive = activeUsername === u.username
+            const isUnread = Boolean(unreadMap[u.username])
+
             return (
               <Link
                 key={u.clerkId}
                 href={`/chat/${u.username}`}
-                onClick={() => setSearchQuery('')}
+                onClick={() => {
+                  setSearchQuery('')
+                  markRead(u.username)
+                }}
                 className={`flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50 ${
                   isActive ? 'bg-indigo-50 border-l-4 border-l-indigo-500' : ''
-                }`}
+                } ${isUnread ? 'bg-indigo-50/40' : ''}`}
               >
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-400 to-purple-400 flex items-center justify-center text-white font-semibold flex-shrink-0">
-                  {u.name[0]?.toUpperCase()}
+                <div className="relative flex-shrink-0">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-400 to-purple-400 flex items-center justify-center text-white font-semibold shadow-sm">
+                    {u.name[0]?.toUpperCase()}
+                  </div>
+                  {isUnread && (
+                    <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-indigo-600 border-2 border-white rounded-full animate-ping" />
+                  )}
+                  {isUnread && (
+                    <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-indigo-600 border-2 border-white rounded-full" />
+                  )}
                 </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-gray-800 truncate">{u.name}</p>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-1.5">
+                    <p className={`text-sm truncate ${isUnread ? 'font-bold text-gray-950' : 'font-medium text-gray-800'}`}>
+                      {u.name}
+                    </p>
+                    {isUnread && (
+                      <span className="flex-shrink-0 px-2 py-0.5 text-[10px] font-extrabold tracking-wider uppercase bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-full shadow-sm animate-pulse">
+                        New
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-gray-400 truncate">@{u.username}</p>
                 </div>
               </Link>

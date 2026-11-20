@@ -38,11 +38,14 @@ interface SidebarState {
   searchResults: UserProfile[]
   searchQuery: string
   isSearching: boolean
+  unreadMap: Record<string, boolean>
 
   setContacts: (c: UserProfile[]) => void
   setSearchResults: (r: UserProfile[]) => void
   setSearchQuery: (q: string) => void
   setIsSearching: (v: boolean) => void
+  markUnread: (username: string) => void
+  markRead: (username: string) => void
 }
 
 export const useSidebarStore = create<SidebarState>((set) => ({
@@ -50,11 +53,21 @@ export const useSidebarStore = create<SidebarState>((set) => ({
   searchResults: [],
   searchQuery: '',
   isSearching: false,
+  unreadMap: {},
 
   setContacts: (c) => set({ contacts: c }),
   setSearchResults: (r) => set({ searchResults: r }),
   setSearchQuery: (q) => set({ searchQuery: q }),
   setIsSearching: (v) => set({ isSearching: v }),
+  markUnread: (username) =>
+    set((s) => ({ unreadMap: { ...s.unreadMap, [username]: true } })),
+  markRead: (username) =>
+    set((s) => {
+      if (!s.unreadMap[username]) return s
+      const updated = { ...s.unreadMap }
+      delete updated[username]
+      return { unreadMap: updated }
+    }),
 }))
 
 // ── Profile store ──────────────────────────────────────────────────────────
