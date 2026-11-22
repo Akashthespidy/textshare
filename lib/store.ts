@@ -11,6 +11,7 @@ interface ChatState {
 
   setMessages: (msgs: Message[]) => void
   addMessage: (msg: Message) => void
+  removeMessage: (id: string) => void
   setIsSending: (v: boolean) => void
   setIsLoading: (v: boolean) => void
   setError: (e: string | null) => void
@@ -25,6 +26,7 @@ export const useChatStore = create<ChatState>((set) => ({
 
   setMessages: (msgs) => set({ messages: msgs }),
   addMessage: (msg) => set((s) => ({ messages: [...s.messages, msg] })),
+  removeMessage: (id) => set((s) => ({ messages: s.messages.filter((m) => m.id !== id) })),
   setIsSending: (v) => set({ isSending: v }),
   setIsLoading: (v) => set({ isLoading: v }),
   setError: (e) => set({ error: e }),

@@ -16,12 +16,13 @@ interface Props {
 export default function ChatWindow({ me, other, initialMessages }: Props) {
   const {
     messages, isSending, error,
-    setMessages, addMessage, setIsSending, setError, reset,
+    setMessages, addMessage, removeMessage, setIsSending, setError, reset,
   } = useChatStore()
   const { showPopup } = useNotificationStore()
 
   const [text, setText] = useState('')
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -189,6 +190,32 @@ export default function ChatWindow({ me, other, initialMessages }: Props) {
     setTimeout(() => setCopiedId(null), 2000)
   }
 
+  async function handleDeleteMessage(id: string) {
+    if (deletingId) return
+    setDeletingId(id)
+
+    // Optimistically remove from state
+    removeMessage(id)
+
+    try {
+      if (!id.startsWith('opt-')) {
+        const res = await fetch(`/api/messages?id=${encodeURIComponent(id)}`, {
+          method: 'DELETE',
+        })
+        if (!res.ok) {
+          const data = await res.json()
+          setError(data.error ?? 'Failed to delete message')
+          await fetchLatestMessages()
+        }
+      }
+    } catch {
+      setError('Network error deleting message')
+      await fetchLatestMessages()
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
   function formatTime(isoOrDate: string | Date) {
     return new Date(isoOrDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   }
@@ -299,7 +326,7 @@ export default function ChatWindow({ me, other, initialMessages }: Props) {
                       )}
                       <button
                         onClick={() => copyText(msg.content, msg.id)}
-                        className={`opacity-0 group-hover:opacity-100 transition-opacity text-xs flex items-center gap-1 px-2.5 py-1 rounded-full ${
+                        className={`opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity text-xs flex items-center gap-1 px-2.5 py-1 rounded-full ${
                           isMe
                             ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'
                             : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -321,6 +348,21 @@ export default function ChatWindow({ me, other, initialMessages }: Props) {
                             <span>Copy</span>
                           </>
                         )}
+                      </button>
+
+                      {/* Manual delete message button */}
+                      <button
+                        onClick={() => handleDeleteMessage(msg.id)}
+                        disabled={deletingId === msg.id}
+                        className={`opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity text-xs flex items-center gap-1 px-2.5 py-1 rounded-full text-gray-400 hover:text-red-600 hover:bg-red-50 active:bg-red-100 transition-colors ${
+                          deletingId === msg.id ? 'opacity-50 cursor-not-allowed' : ''
+                        }`}
+                        title="Delete message"
+                      >
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                        <span className="hidden sm:inline">Delete</span>
                       </button>
                     </div>
                   </div>

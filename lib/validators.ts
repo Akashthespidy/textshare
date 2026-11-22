@@ -43,3 +43,10 @@ export type SendMessageInput = z.infer<typeof sendMessageSchema>
 export const searchQuerySchema = z.object({
   q: z.string().min(1).max(50).optional(),
 })
+
+// ── Delete message ─────────────────────────────────────────────────────────
+
+export const deleteMessageSchema = z.object({
+  id: z.string().min(1, 'Message ID is required'),
+})
+

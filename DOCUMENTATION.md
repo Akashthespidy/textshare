@@ -143,6 +143,11 @@ textshare/
    - **Tab Visibility Pause**: When the user switches tabs or minimizes their phone browser (`document.hidden`), polling **stops completely**, conserving bandwidth and database queries.
    - **Instant Focus Fetch**: The moment the user re-opens or focuses the tab, an immediate fetch is triggered.
    - **State Diffing**: The UI only re-renders if new messages arrived (comparing message count and last ID).
+3. **Manual Message Deletion**:
+   - Each message bubble has a **"Delete"** button with a trash icon.
+   - Available on both desktop (hover) and mobile touch screens (`opacity-100 sm:opacity-0 group-hover:opacity-100`).
+   - Tapping Delete performs an **optimistic instant removal** from client state and dispatches a `DELETE /api/messages?id=<id>` request.
+   - Both the sender and receiver of the conversation can delete any shared message to instantly clear temporary notes.
 
 ---
 

@@ -80,6 +80,23 @@ export async function sendMessage(
   return rows[0]
 }
 
+export async function deleteMessage(messageId: string, clerkId: string): Promise<boolean> {
+  try {
+    const rows = await db
+      .delete(messages)
+      .where(
+        and(
+          eq(messages.id, messageId),
+          or(eq(messages.senderId, clerkId), eq(messages.receiverId, clerkId))
+        )
+      )
+      .returning({ id: messages.id })
+    return rows.length > 0
+  } catch {
+    return false
+  }
+}
+
 export async function getConversationPartnerIds(clerkId: string): Promise<string[]> {
   void triggerAutoCleanup()
   // Get all unique users this person has exchanged messages with
