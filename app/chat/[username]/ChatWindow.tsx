@@ -30,7 +30,7 @@ export default function ChatWindow({ me, other, initialMessages }: Props) {
   // Track known message IDs so we only popup on genuinely NEW messages
   const knownIdsRef = useRef<Set<string>>(new Set(initialMessages.map((m) => m.id)))
   // Track IDs that arrived during this live session to show "NEW" badge on message
-  const newlyReceivedIdsRef = useRef<Set<string>>(new Set())
+  const [newlyReceivedIds, setNewlyReceivedIds] = useState<Set<string>>(new Set())
   // Flag to prevent overlapping concurrent requests
   const isFetchingRef = useRef<boolean>(false)
 
@@ -39,7 +39,6 @@ export default function ChatWindow({ me, other, initialMessages }: Props) {
     reset()
     setMessages(initialMessages)
     knownIdsRef.current = new Set(initialMessages.map((m) => m.id))
-    newlyReceivedIdsRef.current = new Set()
     useSidebarStore.getState().markRead(other.username)
   }, [other.clerkId]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -67,7 +66,7 @@ export default function ChatWindow({ me, other, initialMessages }: Props) {
         if (!knownIdsRef.current.has(msg.id)) {
           knownIdsRef.current.add(msg.id)
           if (msg.senderId === other.clerkId) {
-            newlyReceivedIdsRef.current.add(msg.id)
+            setNewlyReceivedIds((prev) => new Set(prev).add(msg.id))
 
             // Mark conversation as having a NEW message in sidebar!
             useSidebarStore.getState().markUnread(other.username)
@@ -302,7 +301,6 @@ export default function ChatWindow({ me, other, initialMessages }: Props) {
 
             {group.msgs.map((msg) => {
               const isMe = msg.senderId === me.clerkId
-              const isLong = msg.content.length > 300
 
               return (
                 <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} mb-1`}>
@@ -319,7 +317,7 @@ export default function ChatWindow({ me, other, initialMessages }: Props) {
 
                     <div className={`flex items-center gap-2 mt-1 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
                       <span className="text-xs text-gray-400">{formatTime(msg.createdAt)}</span>
-                      {!isMe && newlyReceivedIdsRef.current.has(msg.id) && (
+                      {!isMe && newlyReceivedIds.has(msg.id) && (
                         <span className="px-1.5 py-0.5 text-[9px] font-extrabold uppercase bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-full tracking-wider animate-pulse shadow-sm">
                           New
                         </span>

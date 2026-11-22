@@ -28,5 +28,5 @@ export default async function ChatWithPage({
 
   const initialMessages = await getMessages(userId, other.clerkId)
 
-  return <ChatWindow me={me} other={other} initialMessages={initialMessages} />
+  return <ChatWindow key={other.clerkId} me={me} other={other} initialMessages={initialMessages} />
 }
