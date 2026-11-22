@@ -1,6 +1,6 @@
 import { db } from './drizzle'
 import { users, messages } from './schema'
-import { eq, or, and, ilike } from 'drizzle-orm'
+import { eq, or, and, ilike, lt } from 'drizzle-orm'
 import type { User, Message, NewUser } from './schema'
 
 // ── Re-export types for convenience ──────────────────────────────────────────
@@ -54,6 +54,7 @@ export async function searchUsers(query: string): Promise<User[]> {
 // ── Messages ──────────────────────────────────────────────────────────────────
 
 export async function getMessages(clerkIdA: string, clerkIdB: string): Promise<Message[]> {
+  void triggerAutoCleanup()
   return db
     .select()
     .from(messages)
@@ -71,6 +72,7 @@ export async function sendMessage(
   receiverId: string,
   content: string
 ): Promise<Message> {
+  void triggerAutoCleanup()
   const rows = await db
     .insert(messages)
     .values({ senderId, receiverId, content })
@@ -79,6 +81,7 @@ export async function sendMessage(
 }
 
 export async function getConversationPartnerIds(clerkId: string): Promise<string[]> {
+  void triggerAutoCleanup()
   // Get all unique users this person has exchanged messages with
   const sent = await db
     .selectDistinct({ partnerId: messages.receiverId })
@@ -103,4 +106,39 @@ export async function getConversationPartners(clerkId: string): Promise<User[]> 
     partnerIds.map((id) => getUserByClerkId(id))
   )
   return result.filter((u): u is User => u !== null)
+}
+
+// ── 72-Hour Auto Cleanup ──────────────────────────────────────────────────────
+
+let lastCleanupTimestamp = 0
+const AUTO_CLEANUP_THROTTLE_MS = 10 * 60 * 1000 // Run at most once every 10 minutes
+
+/**
+ * Permanently deletes messages older than retentionHours (default: 72 hours).
+ * Keeps the database clean and lightweight.
+ * Returns the count of deleted messages.
+ */
+export async function cleanupOldMessages(retentionHours = 72): Promise<number> {
+  const cutoff = new Date(Date.now() - retentionHours * 60 * 60 * 1000)
+  const deleted = await db
+    .delete(messages)
+    .where(lt(messages.createdAt, cutoff))
+    .returning({ id: messages.id })
+  return deleted.length
+}
+
+/**
+ * Throttled background trigger for auto-cleanup during normal app usage.
+ * Runs at most once every 10 minutes without slowing down user requests.
+ */
+export async function triggerAutoCleanup(retentionHours = 72): Promise<void> {
+  const now = Date.now()
+  if (now - lastCleanupTimestamp < AUTO_CLEANUP_THROTTLE_MS) return
+  lastCleanupTimestamp = now
+
+  try {
+    await cleanupOldMessages(retentionHours)
+  } catch (err) {
+    console.error('Background message cleanup error:', err)
+  }
 }
