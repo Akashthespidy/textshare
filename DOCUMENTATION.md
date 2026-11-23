@@ -62,9 +62,6 @@ textshare/
 │   ├── api/
 │   │   ├── conversations/
 │   │   │   └── route.ts            # GET: Returns user's active conversation partners
-│   │   ├── cron/
-│   │   │   └── cleanup/
-│   │   │       └── route.ts        # GET/POST: 72-hour automated message purge endpoint
 │   │   ├── messages/
 │   │   │   └── route.ts            # GET & POST: Retrieve & send messages with Zod validation
 │   │   └── users/
@@ -103,7 +100,6 @@ textshare/
 ├── next.config.ts                  # Next.js configuration (cacheComponents, Turbopack)
 ├── package.json                    # Dependencies & npm scripts
 ├── proxy.ts                        # Next.js 16 route proxy (replaces legacy middleware.ts)
-├── vercel.json                     # Vercel Cron scheduled configuration (every 6 hours)
 └── DOCUMENTATION.md                # Complete project documentation (this file)
 ```
 
@@ -114,7 +110,7 @@ textshare/
 ### 1. Authentication & First-Time Setup
 1. **Clerk Proxy Protection (`proxy.ts`)**:
    - Every request is intercepted by Next.js 16's `proxy.ts`.
-   - Public routes (`/sign-in`, `/sign-up`, `/api/cron/*`) are accessible without auth.
+   - Public routes (`/sign-in`, `/sign-up`) are accessible without auth.
    - Any unauthenticated request to `/chat`, `/profile`, or `/setup-username` is redirected to `/sign-in`.
 2. **First Login Detection (`app/page.tsx` & `app/chat/layout.tsx`)**:
    - When a user logs in via Clerk, the server verifies whether a corresponding record exists in the Neon `users` table via `getUserByClerkId(userId)`.
@@ -182,19 +178,6 @@ On desktop (screens ≥ 768px), the sidebar and chat window sit side-by-side. On
 - **Mobile Back Button (`←`)**: A back arrow appears in the chat header on mobile to smoothly return to the conversation list.
 - **No iOS Auto-Zoom Bug**: Textarea font size is configured to `16px` (`text-base sm:text-sm`) so mobile Safari won't zoom into the screen when opening the keyboard.
 - **Dynamic Viewport Height**: Configured with `h-[100dvh]` so mobile navigation bars don't cut off messages.
-
----
-
-### 7. 72-Hour Automatic Database Purge
-To prevent the Neon database from accumulating gigabytes of massive text notes:
-- **Retention Rule**: Any message whose `createdAt` timestamp is older than **72 hours (3 days)** is permanently deleted.
-- **User Accounts Protected**: The `users` table is never deleted; users maintain their usernames and profiles permanently.
-- **Dual Cleanup Triggers**:
-  1. **In-App Auto-Purge (`lib/db.ts`)**: Whenever someone loads messages, sends a message, or loads conversations, a throttled background cleanup check (`triggerAutoCleanup()`) runs (at most once every 10 minutes).
-  2. **Automated Scheduled Cron (`app/api/cron/cleanup/route.ts` & `vercel.json`)**: Configured to run every 6 hours (`0 */6 * * *`) via Vercel Cron. Can also be triggered manually:
-     ```bash
-     curl https://your-domain.com/api/cron/cleanup
-     ```
 
 ---
 
@@ -274,9 +257,6 @@ NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=/
 
 # Neon Serverless PostgreSQL Connection String (from https://console.neon.tech)
 DATABASE_URL=postgresql://user:password@ep-...neon.tech/neondb?sslmode=require
-
-# (Optional) Secret token to secure the /api/cron/cleanup endpoint
-CRON_SECRET=your-optional-secret-here
 ```
 
 ---
@@ -307,4 +287,4 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 1. Push your repository to GitHub.
 2. Import the repository in [Vercel](https://vercel.com).
 3. Add the environment variables from `.env` into the Vercel project settings.
-4. Deploy! Vercel will automatically detect `vercel.json` and set up the 6-hourly 72-hour message purge cron job.
+4. Deploy! Your app is live.
