@@ -33,7 +33,7 @@ export const sendMessageSchema = z.object({
   content: z
     .string()
     .min(1, 'Message cannot be empty')
-    .max(100_000, 'Message too long (max 100,000 characters)'),
+    .max(2_000_000, 'Message too long (max 2,000,000 characters)'),
 })
 
 export type SendMessageInput = z.infer<typeof sendMessageSchema>

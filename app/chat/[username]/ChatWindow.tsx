@@ -278,7 +278,7 @@ export default function ChatWindow({ me, other, initialMessages }: Props) {
             </svg>
           </button>
           <span className="hidden sm:inline text-xs text-gray-400 italic">
-            Supports 100k+ words · Bangla ✓
+            Supports 50,000+ words · Bangla ✓ · Full Code Files
           </span>
         </div>
       </div>
@@ -306,7 +306,7 @@ export default function ChatWindow({ me, other, initialMessages }: Props) {
                 <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} mb-1`}>
                   <div className={`group relative max-w-[92%] sm:max-w-[85%] md:max-w-[78%] flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
                     <div
-                      className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed shadow-sm select-text w-full ${
+                      className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed shadow-sm select-text w-full break-words [overflow-wrap:anywhere] ${
                         isMe
                           ? 'bg-indigo-600 text-white rounded-br-sm'
                           : 'bg-white text-gray-800 rounded-bl-sm border border-gray-100'

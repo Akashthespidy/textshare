@@ -16,7 +16,7 @@ interface Segment {
 }
 
 // Regex to detect markdown code blocks: ```lang:filename ... ``` or ```lang ... ```
-const CODE_BLOCK_REGEX = /```(\w+)?(?::([\w.-]+))?\n([\s\S]*?)```/g
+const CODE_BLOCK_REGEX = /```([a-zA-Z0-9_#+.-]+)?(?::([\w.-]+))?\r?\n([\s\S]*?)```/g
 
 // Heuristic to detect if plain text is raw code (no backticks)
 function isLikelyRawCode(text: string): { isCode: boolean; detectedLang: string } {
@@ -122,7 +122,7 @@ export default function FormattedMessage({ content, isMe = false }: Props) {
           // Plain text segment
           if (!seg.content.trim()) return null
           return (
-            <p key={i} className="whitespace-pre-wrap break-words leading-relaxed" dir="auto">
+            <p key={i} className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] leading-relaxed select-text" dir="auto">
               {seg.content}
             </p>
           )
@@ -153,7 +153,7 @@ export default function FormattedMessage({ content, isMe = false }: Props) {
         {viewAsCode ? (
           <CodeBlock code={content} language={rawCodeInfo.detectedLang} />
         ) : (
-          <p className="whitespace-pre-wrap break-words leading-relaxed" dir="auto">
+          <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] leading-relaxed select-text" dir="auto">
             {content}
           </p>
         )}
@@ -163,7 +163,7 @@ export default function FormattedMessage({ content, isMe = false }: Props) {
 
   // 3. Normal text (e.g. Bangla notes, 50,000 words, letters, etc.)
   return (
-    <p className="whitespace-pre-wrap break-words leading-relaxed select-text" dir="auto">
+    <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] leading-relaxed select-text" dir="auto">
       {content}
     </p>
   )

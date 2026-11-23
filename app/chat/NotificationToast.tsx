@@ -6,14 +6,16 @@ import { useNotificationStore, type ToastNotification } from '@/lib/store'
 function SingleToast({ notif }: { notif: ToastNotification }) {
   const { removePopup } = useNotificationStore()
   const [copied, setCopied] = useState(false)
+  const [isExpanded, setIsExpanded] = useState(false)
 
-  // Auto dismiss after 6 seconds
+  // Auto dismiss after 10 seconds if not expanded
   useEffect(() => {
+    if (isExpanded) return
     const timer = setTimeout(() => {
       removePopup(notif.id)
-    }, 6000)
+    }, 10000)
     return () => clearTimeout(timer)
-  }, [notif.id, removePopup])
+  }, [notif.id, removePopup, isExpanded])
 
   async function handleCopy(e: React.MouseEvent) {
     e.stopPropagation()
@@ -22,14 +24,11 @@ function SingleToast({ notif }: { notif: ToastNotification }) {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  // Preview snippet: first 120 chars
-  const preview =
-    notif.content.length > 120
-      ? notif.content.slice(0, 120) + '…'
-      : notif.content
+  const isLong = notif.content.length > 200
+  const displayContent = isExpanded || !isLong ? notif.content : notif.content.slice(0, 200) + '…'
 
   return (
-    <div className="pointer-events-auto bg-white/95 backdrop-blur-md border border-indigo-100 shadow-2xl rounded-2xl p-4 transition-all duration-300 animate-in slide-in-from-top-4 fade-in hover:shadow-indigo-100">
+    <div className="pointer-events-auto bg-white/95 backdrop-blur-md border border-indigo-100 shadow-2xl rounded-2xl p-4 transition-all duration-300 animate-in slide-in-from-top-4 fade-in hover:shadow-indigo-100 max-w-sm sm:max-w-md w-full">
       <div className="flex items-start justify-between gap-3 mb-2">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold shadow-sm flex-shrink-0">
@@ -57,13 +56,24 @@ function SingleToast({ notif }: { notif: ToastNotification }) {
         </button>
       </div>
 
-      {/* Message preview snippet */}
+      {/* Message content */}
       <div
-        className="bg-indigo-50/70 border border-indigo-100/50 rounded-xl p-2.5 text-xs text-gray-700 leading-relaxed max-h-24 overflow-y-auto break-words select-text mb-3"
+        className={`bg-indigo-50/70 border border-indigo-100/50 rounded-xl p-2.5 text-xs text-gray-800 leading-relaxed overflow-y-auto break-words [overflow-wrap:anywhere] select-text mb-2 ${
+          isExpanded ? 'max-h-72' : 'max-h-36'
+        }`}
         dir="auto"
       >
-        {preview}
+        {displayContent}
       </div>
+
+      {isLong && (
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="text-[11px] text-indigo-600 hover:text-indigo-800 font-medium mb-2.5 inline-flex items-center gap-1 transition-colors"
+        >
+          {isExpanded ? '▲ Collapse' : `▼ Read full text (${notif.content.length.toLocaleString()} characters)`}
+        </button>
+      )}
 
       {/* Action buttons */}
       <div className="flex items-center justify-between gap-2 pt-1">

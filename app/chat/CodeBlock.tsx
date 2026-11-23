@@ -88,6 +88,7 @@ function getFileMeta(rawLang?: string, customName?: string) {
 
 export default function CodeBlock({ code, language = '', customFilename }: Props) {
   const [copied, setCopied] = useState(false)
+  const [isExpanded, setIsExpanded] = useState(false)
   const meta = getFileMeta(language, customFilename)
 
   const lines = useMemo(() => {
@@ -182,7 +183,9 @@ export default function CodeBlock({ code, language = '', customFilename }: Props
       </div>
 
       {/* ── VS Code Editor Body (with line numbers) ── */}
-      <div className="py-2.5 max-h-[500px] overflow-y-auto overflow-x-auto text-xs sm:text-sm leading-relaxed scrollbar-thin scrollbar-thumb-zinc-700">
+      <div className={`py-2.5 overflow-x-auto text-xs sm:text-sm leading-relaxed scrollbar-thin scrollbar-thumb-zinc-700 ${
+        isExpanded ? 'max-h-none overflow-y-visible' : 'max-h-[500px] overflow-y-auto'
+      }`}>
         <table className="w-full border-collapse">
           <tbody>
             {lines.map((lineHtml, i) => (
@@ -200,6 +203,21 @@ export default function CodeBlock({ code, language = '', customFilename }: Props
           </tbody>
         </table>
       </div>
+
+      {/* Expand/Collapse Footer for large files */}
+      {lines.length > 25 && (
+        <div className="bg-[#252526] px-3.5 py-1.5 flex items-center justify-between border-t border-[#333333] select-none text-[11px]">
+          <span className="text-[#858585]">
+            {isExpanded ? `Showing all ${lines.length} lines` : `Showing first lines (${lines.length} total lines)`}
+          </span>
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="text-indigo-400 hover:text-indigo-300 font-sans font-medium flex items-center gap-1 transition-colors"
+          >
+            {isExpanded ? '▲ Collapse' : `▼ Expand full code (${lines.length} lines)`}
+          </button>
+        </div>
+      )}
     </div>
   )
 }
